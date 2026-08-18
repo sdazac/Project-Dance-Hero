@@ -9,3 +9,13 @@ pose_similarity = 0.40
 angle_similarity = 0.25
 motion_similarity = 0.20
 timing_similarity = 0.15
+
+[camera]
+device_index = 0
+resolution_width = 640
+resolution_height = 480
+consecutive_failure_threshold = 10
+
+[pose]
+model_path = "assets/models/pose_landmarker.task"
+skeleton_visibility_threshold = 0.5

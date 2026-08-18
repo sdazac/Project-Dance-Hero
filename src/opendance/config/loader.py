@@ -13,7 +13,13 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from opendance.config.models import AppConfig, ScoringThresholds, ScoringWeights
+from opendance.config.models import (
+    AppConfig,
+    CameraConfig,
+    PoseConfig,
+    ScoringThresholds,
+    ScoringWeights,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,9 +183,72 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
         else:
             weight_kwargs[field_name] = default_val
 
+    # Validate and build CameraConfig
+    camera_raw = merged.get("camera", {})
+    defaults_camera = CameraConfig()
+    camera_kwargs: dict[str, Any] = {}
+
+    camera_kwargs["device_index"] = validate_value(
+        "camera.device_index",
+        camera_raw.get("device_index", defaults_camera.device_index),
+        int,
+        (0, 1000),
+        defaults_camera.device_index,
+    )
+    camera_kwargs["resolution_width"] = validate_value(
+        "camera.resolution_width",
+        camera_raw.get("resolution_width", defaults_camera.resolution_width),
+        int,
+        (1, 10000),
+        defaults_camera.resolution_width,
+    )
+    camera_kwargs["resolution_height"] = validate_value(
+        "camera.resolution_height",
+        camera_raw.get("resolution_height", defaults_camera.resolution_height),
+        int,
+        (1, 10000),
+        defaults_camera.resolution_height,
+    )
+    camera_kwargs["consecutive_failure_threshold"] = validate_value(
+        "camera.consecutive_failure_threshold",
+        camera_raw.get(
+            "consecutive_failure_threshold",
+            defaults_camera.consecutive_failure_threshold,
+        ),
+        int,
+        (1, 10000),
+        defaults_camera.consecutive_failure_threshold,
+    )
+
+    # Validate and build PoseConfig
+    pose_raw = merged.get("pose", {})
+    defaults_pose = PoseConfig()
+    pose_kwargs: dict[str, Any] = {}
+
+    model_path_val = pose_raw.get("model_path", defaults_pose.model_path)
+    if not isinstance(model_path_val, str) or not model_path_val.strip():
+        logger.warning(
+            "Configuration key 'pose.model_path': expected non-empty string. Using default."
+        )
+        model_path_val = defaults_pose.model_path
+    pose_kwargs["model_path"] = model_path_val
+
+    pose_kwargs["skeleton_visibility_threshold"] = validate_value(
+        "pose.skeleton_visibility_threshold",
+        pose_raw.get(
+            "skeleton_visibility_threshold",
+            defaults_pose.skeleton_visibility_threshold,
+        ),
+        float,
+        (0.0, 1.0),
+        defaults_pose.skeleton_visibility_threshold,
+    )
+
     return AppConfig(
         scoring_thresholds=ScoringThresholds(**threshold_kwargs),
         scoring_weights=ScoringWeights(**weight_kwargs),
+        camera_config=CameraConfig(**camera_kwargs),
+        pose_config=PoseConfig(**pose_kwargs),
     )
 
 

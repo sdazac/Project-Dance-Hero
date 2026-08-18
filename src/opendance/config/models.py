@@ -32,12 +32,32 @@ class ScoringWeights:
 
 
 @dataclass(frozen=True)
+class CameraConfig:
+    """Camera subsystem configuration."""
+
+    device_index: int = 0
+    resolution_width: int = 640
+    resolution_height: int = 480
+    consecutive_failure_threshold: int = 10
+
+
+@dataclass(frozen=True)
+class PoseConfig:
+    """Pose detection configuration."""
+
+    model_path: str = "assets/models/pose_landmarker.task"
+    skeleton_visibility_threshold: float = 0.5
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level application configuration.
 
-    Composed of scoring thresholds and scoring weights.
+    Composed of scoring, camera, and pose configuration sections.
     Immutable after construction — create a new instance for changes.
     """
 
     scoring_thresholds: ScoringThresholds = field(default_factory=ScoringThresholds)
     scoring_weights: ScoringWeights = field(default_factory=ScoringWeights)
+    camera_config: CameraConfig = field(default_factory=CameraConfig)
+    pose_config: PoseConfig = field(default_factory=PoseConfig)

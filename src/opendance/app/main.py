@@ -4,7 +4,7 @@ Initializes logging, configuration, and the PySide6 GUI in strict order:
 1. Logging System
 2. Configuration System
 3. PySide6 QApplication
-4. Main Window
+4. Main Window with Camera Pipeline
 """
 
 import sys
@@ -19,8 +19,10 @@ def main() -> int:
     1. setup_logging() — if it raises, write to stderr and continue with defaults
     2. load_config() — if it raises, log error and continue with default AppConfig()
     3. Create QApplication
-    4. Create and show main window (title "OpenDance AI", min size 800×600)
-    5. Start Qt event loop
+    4. Create CameraManager with camera+pose config
+    5. Create CameraWidget as central widget
+    6. Connect aboutToQuit → cleanup
+    7. Start Qt event loop
     """
     # 1. Initialize logging system
     try:
@@ -32,14 +34,14 @@ def main() -> int:
     # 2. Initialize configuration system
     try:
         from opendance.config import load_config
-        _config = load_config()
+        config = load_config()
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error(
             "Configuration initialization failed: %s. Using defaults.", exc
         )
         from opendance.config.models import AppConfig
-        _config = AppConfig()
+        config = AppConfig()
 
     # 3. Create QApplication and main window
     try:
@@ -48,8 +50,19 @@ def main() -> int:
         window = QMainWindow()
         window.setWindowTitle("OpenDance AI")
         window.setMinimumSize(800, 600)
-        window.show()
 
+        # 4. Create camera pipeline (Phase 1)
+        from opendance.camera.manager import CameraManager
+        from opendance.ui.camera_widget import CameraWidget
+
+        camera_manager = CameraManager(config.camera_config, config.pose_config)
+        camera_widget = CameraWidget(camera_manager, config.pose_config)
+        window.setCentralWidget(camera_widget)
+
+        # 5. Connect cleanup on application quit
+        app.aboutToQuit.connect(camera_manager.cleanup)
+
+        window.show()
         return app.exec()
     except Exception as exc:
         import logging

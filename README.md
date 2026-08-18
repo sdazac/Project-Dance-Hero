@@ -44,6 +44,12 @@ pip install -e ".[dev]"
 python -c "import opendance; print(opendance.__version__)"
 ```
 
+6. Download the MediaPipe pose model:
+
+```bash
+python scripts/download_models.py
+```
+
 ## Usage
 
 Launch the application:

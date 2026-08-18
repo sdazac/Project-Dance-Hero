@@ -36,3 +36,6 @@ htmlcov/
 
 # Log files
 *.log
+
+# MediaPipe model files (downloaded, not committed)
+assets/models/*.task
