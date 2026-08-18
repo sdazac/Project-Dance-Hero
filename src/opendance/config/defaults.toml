@@ -1,0 +1,11 @@
+[scoring.thresholds]
+perfect_min = 90.0
+great_min = 75.0
+ok_min = 50.0
+meh_min = 30.0
+
+[scoring.weights]
+pose_similarity = 0.40
+angle_similarity = 0.25
+motion_similarity = 0.20
+timing_similarity = 0.15
