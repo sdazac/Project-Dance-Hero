@@ -33,3 +33,13 @@ min_velocity_threshold = 0.01
 cache_directory = ""
 auto_cache = false
 sample_fps = 30.0
+
+[scoring.comparison]
+pose_scale_factor = 200.0
+angle_scale = 1.0
+timing_scale = 0.5
+min_valid_landmarks = 8
+feedback_significance_threshold = 0.1
+motion_speed_weight = 0.5
+motion_direction_weight = 0.5
+epsilon = 0.001

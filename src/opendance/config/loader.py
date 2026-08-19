@@ -16,6 +16,7 @@ else:
 from opendance.config.models import (
     AppConfig,
     CameraConfig,
+    ComparisonConfig,
     MotionConfig,
     NormalizationConfig,
     PoseConfig,
@@ -327,6 +328,76 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
         defaults_ref.sample_fps,
     )
 
+    # Validate and build ComparisonConfig (Phase 3)
+    scoring_raw = merged.get("scoring", {})
+    comp_raw = scoring_raw.get("comparison", {})
+    defaults_comp = ComparisonConfig()
+
+    comp_pose_scale = validate_value(
+        "scoring.comparison.pose_scale_factor",
+        comp_raw.get("pose_scale_factor", defaults_comp.pose_scale_factor),
+        float,
+        (0.001, 100000.0),
+        defaults_comp.pose_scale_factor,
+    )
+    comp_angle_scale = validate_value(
+        "scoring.comparison.angle_scale",
+        comp_raw.get("angle_scale", defaults_comp.angle_scale),
+        float,
+        (0.001, 100000.0),
+        defaults_comp.angle_scale,
+    )
+    comp_timing_scale = validate_value(
+        "scoring.comparison.timing_scale",
+        comp_raw.get("timing_scale", defaults_comp.timing_scale),
+        float,
+        (0.001, 100000.0),
+        defaults_comp.timing_scale,
+    )
+    comp_min_landmarks = validate_value(
+        "scoring.comparison.min_valid_landmarks",
+        comp_raw.get("min_valid_landmarks", defaults_comp.min_valid_landmarks),
+        int,
+        (1, 33),
+        defaults_comp.min_valid_landmarks,
+    )
+    comp_feedback_thresh = validate_value(
+        "scoring.comparison.feedback_significance_threshold",
+        comp_raw.get(
+            "feedback_significance_threshold",
+            defaults_comp.feedback_significance_threshold,
+        ),
+        float,
+        (0.0, 1.0),
+        defaults_comp.feedback_significance_threshold,
+    )
+    comp_speed_weight = validate_value(
+        "scoring.comparison.motion_speed_weight",
+        comp_raw.get("motion_speed_weight", defaults_comp.motion_speed_weight),
+        float,
+        (0.0, 1.0),
+        defaults_comp.motion_speed_weight,
+    )
+    comp_dir_weight = validate_value(
+        "scoring.comparison.motion_direction_weight",
+        comp_raw.get("motion_direction_weight", defaults_comp.motion_direction_weight),
+        float,
+        (0.0, 1.0),
+        defaults_comp.motion_direction_weight,
+    )
+    comp_epsilon = validate_value(
+        "scoring.comparison.epsilon",
+        comp_raw.get("epsilon", defaults_comp.epsilon),
+        float,
+        (0.0, 1.0),
+        defaults_comp.epsilon,
+    )
+    if comp_epsilon <= 0.0:
+        logger.warning(
+            "Configuration key 'scoring.comparison.epsilon': must be > 0. Using default."
+        )
+        comp_epsilon = defaults_comp.epsilon
+
     return AppConfig(
         scoring_thresholds=ScoringThresholds(**threshold_kwargs),
         scoring_weights=ScoringWeights(**weight_kwargs),
@@ -345,6 +416,16 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
             cache_directory=ref_cache_dir,
             auto_cache=ref_auto_cache,
             sample_fps=ref_sample_fps,
+        ),
+        comparison_config=ComparisonConfig(
+            pose_scale_factor=comp_pose_scale,
+            angle_scale=comp_angle_scale,
+            timing_scale=comp_timing_scale,
+            min_valid_landmarks=comp_min_landmarks,
+            feedback_significance_threshold=comp_feedback_thresh,
+            motion_speed_weight=comp_speed_weight,
+            motion_direction_weight=comp_dir_weight,
+            epsilon=comp_epsilon,
         ),
     )
 

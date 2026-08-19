@@ -76,10 +76,25 @@ class ReferenceConfig:
 
 
 @dataclass(frozen=True)
+class ComparisonConfig:
+    """Scoring comparison parameters (Phase 3)."""
+
+    pose_scale_factor: float = 200.0
+    angle_scale: float = 1.0
+    timing_scale: float = 0.5
+    min_valid_landmarks: int = 8
+    feedback_significance_threshold: float = 0.1
+    motion_speed_weight: float = 0.5
+    motion_direction_weight: float = 0.5
+    epsilon: float = 0.001
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level application configuration.
 
-    Composed of scoring, camera, pose, normalization, motion, and reference sections.
+    Composed of scoring, camera, pose, normalization, motion, reference,
+    and comparison sections.
     Immutable after construction — create a new instance for changes.
     """
 
@@ -92,3 +107,4 @@ class AppConfig:
     )
     motion_config: MotionConfig = field(default_factory=MotionConfig)
     reference_config: ReferenceConfig = field(default_factory=ReferenceConfig)
+    comparison_config: ComparisonConfig = field(default_factory=ComparisonConfig)
