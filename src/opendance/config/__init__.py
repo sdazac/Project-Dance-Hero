@@ -4,7 +4,10 @@ from opendance.config.loader import load_config
 from opendance.config.models import (
     AppConfig,
     CameraConfig,
+    MotionConfig,
+    NormalizationConfig,
     PoseConfig,
+    ReferenceConfig,
     ScoringThresholds,
     ScoringWeights,
 )
@@ -13,7 +16,10 @@ __all__ = [
     "load_config",
     "AppConfig",
     "CameraConfig",
+    "MotionConfig",
+    "NormalizationConfig",
     "PoseConfig",
+    "ReferenceConfig",
     "ScoringThresholds",
     "ScoringWeights",
 ]

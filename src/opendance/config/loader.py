@@ -16,7 +16,10 @@ else:
 from opendance.config.models import (
     AppConfig,
     CameraConfig,
+    MotionConfig,
+    NormalizationConfig,
     PoseConfig,
+    ReferenceConfig,
     ScoringThresholds,
     ScoringWeights,
 )
@@ -244,11 +247,105 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
         defaults_pose.skeleton_visibility_threshold,
     )
 
+    # Validate and build NormalizationConfig (Phase 2)
+    norm_raw = merged.get("normalization", {})
+    defaults_norm = NormalizationConfig()
+
+    norm_enabled = norm_raw.get("enabled", defaults_norm.enabled)
+    if not isinstance(norm_enabled, bool):
+        logger.warning(
+            "Configuration key 'normalization.enabled': expected bool. Using default."
+        )
+        norm_enabled = defaults_norm.enabled
+
+    norm_vis_threshold = validate_value(
+        "normalization.visibility_threshold",
+        norm_raw.get("visibility_threshold", defaults_norm.visibility_threshold),
+        float,
+        (0.0, 1.0),
+        defaults_norm.visibility_threshold,
+    )
+    norm_min_scale = validate_value(
+        "normalization.min_body_scale",
+        norm_raw.get("min_body_scale", defaults_norm.min_body_scale),
+        float,
+        (0.0, 100.0),
+        defaults_norm.min_body_scale,
+    )
+    if norm_min_scale <= 0.0:
+        logger.warning(
+            "Configuration key 'normalization.min_body_scale': must be > 0. Using default."
+        )
+        norm_min_scale = defaults_norm.min_body_scale
+
+    norm_strategy = norm_raw.get(
+        "missing_data_strategy", defaults_norm.missing_data_strategy
+    )
+    if norm_strategy not in {"leave_none"}:
+        logger.warning(
+            "Configuration key 'normalization.missing_data_strategy': "
+            "invalid value '%s'. Using default.",
+            norm_strategy,
+        )
+        norm_strategy = defaults_norm.missing_data_strategy
+
+    # Validate and build MotionConfig (Phase 2)
+    motion_raw = merged.get("motion", {})
+    defaults_motion = MotionConfig()
+
+    motion_min_vel = validate_value(
+        "motion.min_velocity_threshold",
+        motion_raw.get("min_velocity_threshold", defaults_motion.min_velocity_threshold),
+        float,
+        (0.0, 1000.0),
+        defaults_motion.min_velocity_threshold,
+    )
+
+    # Validate and build ReferenceConfig (Phase 2)
+    ref_raw = merged.get("reference", {})
+    defaults_ref = ReferenceConfig()
+
+    ref_cache_dir = ref_raw.get("cache_directory", defaults_ref.cache_directory)
+    if not isinstance(ref_cache_dir, str):
+        logger.warning(
+            "Configuration key 'reference.cache_directory': expected string. Using default."
+        )
+        ref_cache_dir = defaults_ref.cache_directory
+
+    ref_auto_cache = ref_raw.get("auto_cache", defaults_ref.auto_cache)
+    if not isinstance(ref_auto_cache, bool):
+        logger.warning(
+            "Configuration key 'reference.auto_cache': expected bool. Using default."
+        )
+        ref_auto_cache = defaults_ref.auto_cache
+
+    ref_sample_fps = validate_value(
+        "reference.sample_fps",
+        ref_raw.get("sample_fps", defaults_ref.sample_fps),
+        float,
+        (0.001, 1000.0),
+        defaults_ref.sample_fps,
+    )
+
     return AppConfig(
         scoring_thresholds=ScoringThresholds(**threshold_kwargs),
         scoring_weights=ScoringWeights(**weight_kwargs),
         camera_config=CameraConfig(**camera_kwargs),
         pose_config=PoseConfig(**pose_kwargs),
+        normalization_config=NormalizationConfig(
+            enabled=norm_enabled,
+            visibility_threshold=norm_vis_threshold,
+            min_body_scale=norm_min_scale,
+            missing_data_strategy=norm_strategy,
+        ),
+        motion_config=MotionConfig(
+            min_velocity_threshold=motion_min_vel,
+        ),
+        reference_config=ReferenceConfig(
+            cache_directory=ref_cache_dir,
+            auto_cache=ref_auto_cache,
+            sample_fps=ref_sample_fps,
+        ),
     )
 
 

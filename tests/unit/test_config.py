@@ -198,7 +198,12 @@ class TestUserConfigPath:
         with patch("opendance.config.loader.sys.platform", "win32"), \
              patch.dict("os.environ", {"APPDATA": r"C:\Users\Test\AppData\Roaming"}):
             path = get_user_config_path()
-        assert path == Path(r"C:\Users\Test\AppData\Roaming\opendance\config.toml")
+        # On non-Windows hosts, Path uses forward slashes but the components
+        # are correct. Compare using PureWindowsPath for platform-independent
+        # validation of the Windows path structure.
+        from pathlib import PureWindowsPath
+        expected = PureWindowsPath(r"C:\Users\Test\AppData\Roaming\opendance\config.toml")
+        assert PureWindowsPath(str(path)) == expected
 
     def test_non_windows_path_uses_home_config(self) -> None:
         with patch("opendance.config.loader.sys.platform", "linux"), \

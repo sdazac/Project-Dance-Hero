@@ -50,10 +50,36 @@ class PoseConfig:
 
 
 @dataclass(frozen=True)
+class NormalizationConfig:
+    """Pose normalization configuration (Phase 2)."""
+
+    enabled: bool = False
+    visibility_threshold: float = 0.5
+    min_body_scale: float = 0.001
+    missing_data_strategy: str = "leave_none"
+
+
+@dataclass(frozen=True)
+class MotionConfig:
+    """Motion feature extraction configuration (Phase 2)."""
+
+    min_velocity_threshold: float = 0.01
+
+
+@dataclass(frozen=True)
+class ReferenceConfig:
+    """Reference video analysis configuration (Phase 2)."""
+
+    cache_directory: str = ""
+    auto_cache: bool = False
+    sample_fps: float = 30.0
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level application configuration.
 
-    Composed of scoring, camera, and pose configuration sections.
+    Composed of scoring, camera, pose, normalization, motion, and reference sections.
     Immutable after construction — create a new instance for changes.
     """
 
@@ -61,3 +87,8 @@ class AppConfig:
     scoring_weights: ScoringWeights = field(default_factory=ScoringWeights)
     camera_config: CameraConfig = field(default_factory=CameraConfig)
     pose_config: PoseConfig = field(default_factory=PoseConfig)
+    normalization_config: NormalizationConfig = field(
+        default_factory=NormalizationConfig
+    )
+    motion_config: MotionConfig = field(default_factory=MotionConfig)
+    reference_config: ReferenceConfig = field(default_factory=ReferenceConfig)
