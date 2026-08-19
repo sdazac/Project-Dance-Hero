@@ -19,6 +19,7 @@ consecutive_failure_threshold = 10
 [pose]
 model_path = "assets/models/pose_landmarker.task"
 skeleton_visibility_threshold = 0.5
+max_poses = 1
 
 [normalization]
 enabled = false
@@ -32,7 +33,7 @@ min_velocity_threshold = 0.01
 [reference]
 cache_directory = ""
 auto_cache = false
-sample_fps = 30.0
+sample_fps = 15.0
 
 [scoring.comparison]
 pose_scale_factor = 200.0

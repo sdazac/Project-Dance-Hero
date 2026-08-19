@@ -33,7 +33,7 @@ class TestPhase2ConfigDefaults:
         rc = config.reference_config
         assert rc.cache_directory == ""
         assert rc.auto_cache is False
-        assert rc.sample_fps == 30.0
+        assert rc.sample_fps == 15.0
 
     def test_phase1_config_unchanged(self) -> None:
         """Phase 1 config values remain intact after Phase 2 extension."""
@@ -139,7 +139,7 @@ class TestPhase2ConfigValidation:
         user_toml.write_text('[reference]\nsample_fps = 0.0\n')
         with caplog.at_level(logging.WARNING):
             config = load_config(user_path=user_toml)
-        assert config.reference_config.sample_fps == 30.0
+        assert config.reference_config.sample_fps == 15.0
 
     def test_auto_cache_wrong_type(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture

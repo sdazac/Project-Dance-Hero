@@ -248,6 +248,14 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
         defaults_pose.skeleton_visibility_threshold,
     )
 
+    pose_kwargs["max_poses"] = validate_value(
+        "pose.max_poses",
+        pose_raw.get("max_poses", defaults_pose.max_poses),
+        int,
+        (1, 10),
+        defaults_pose.max_poses,
+    )
+
     # Validate and build NormalizationConfig (Phase 2)
     norm_raw = merged.get("normalization", {})
     defaults_norm = NormalizationConfig()

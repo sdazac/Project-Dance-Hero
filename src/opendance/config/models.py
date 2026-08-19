@@ -47,6 +47,7 @@ class PoseConfig:
 
     model_path: str = "assets/models/pose_landmarker.task"
     skeleton_visibility_threshold: float = 0.5
+    max_poses: int = 1
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ class ReferenceConfig:
 
     cache_directory: str = ""
     auto_cache: bool = False
-    sample_fps: float = 30.0
+    sample_fps: float = 15.0
 
 
 @dataclass(frozen=True)
