@@ -1,20 +1,21 @@
-# OpenDance AI — Development Status
+# ModDance Hero — Development Status
 
 ## Project Purpose
 
-OpenDance AI is an open-source desktop application for dance practice, movement analysis, and rhythm-game-style scoring. It compares user movement captured via webcam against a reference dance video using pose detection, motion analysis, temporal alignment, and configurable scoring.
+ModDance Hero (formerly OpenDance AI) is an open-source desktop application for dance practice, movement analysis, and rhythm-game-style scoring. It compares user movement captured via webcam against a reference dance video using pose detection, motion analysis, temporal alignment, and configurable scoring.
 
 ## Current Status
 
-**Phase 3 complete. All scoring pipeline modules implemented and tested.**
+**Phase 3.5 complete. Multi-person subject tracking implemented and validated.**
 
-| Phase | Status | Git Tag | Tests |
-|-------|--------|---------|-------|
+| Phase | Status | Git Commit | Tests |
+|-------|--------|------------|-------|
 | Phase 0 — Project Foundation | ✅ Complete | `v0.1.0` | 38 |
 | Phase 1 — Camera & Pose Pipeline | ✅ Complete | `v0.2.0-phase1` | +73 |
 | Phase 2 — Pose Normalization & Motion | ✅ Complete | `v0.2.0` | +81 |
-| Phase 3 — Scoring Pipeline | ✅ Complete | — | +193 |
-| **Total** | | `v0.2.0` (da0386a) | **385** |
+| Phase 3 — Scoring Pipeline | ✅ Complete | `v0.3.0` | +193 |
+| Phase 3.5 — Subject Tracking & Diagnostics | ✅ Complete | `15b0fd5` | +40 |
+| **Total** | | `15b0fd5` | **425** |
 
 ## Completed Phases
 
@@ -48,7 +49,7 @@ OpenDance AI is an open-source desktop application for dance practice, movement 
 - Analysis cache (gzip JSON + numpy.savez_compressed, no pickle)
 - Configuration extensions ([normalization], [motion], [reference])
 
-### Phase 3 — Scoring Pipeline
+### Phase 3 — Scoring Pipeline (v0.3.0)
 
 - ComparisonConfig dataclass with 8 configurable parameters
 - LANDMARK_REGIONS mapping (33 landmarks → 6 body regions)
@@ -63,13 +64,27 @@ OpenDance AI is an open-source desktop application for dance practice, movement 
 - ScoringEngine orchestrator (score_frame, score_sequence)
 - Configuration extensions ([scoring.comparison])
 
+### Phase 3.5 — Multi-Person Subject Tracking (15b0fd5)
+
+- **Configurable analysis FPS**: default changed to 15 FPS (near real-time on CPU)
+- **PoseConfig.max_poses**: configurable 1–10 (default 1)
+- **MultiPoseDetector**: detects up to 5 people simultaneously
+- **SubjectTrack**: persistent identity with subject_id, confidence, state
+- **Composite identity matching**: trajectory prediction + landmark geometry + body area
+- **Ambiguity gate**: when two candidates score too similarly → UNCERTAIN (never switches)
+- **Hard identity lock**: once selected, never auto-switches to another person
+- **Manual correction API**: `select_subject()`, `correct_subject()`, `reset_tracking()`
+- **TrackState**: UNLOCKED → TRACKING → OCCLUDED → LOST → UNCERTAIN
+- **Diagnostic tools**: 7 standalone scripts for validation and benchmarking
+- **Performance analysis**: documented in `.kiro/specs/scoring-pipeline/performance-analysis.md`
+
 ## Current Architecture
 
 ```
 src/opendance/
 ├── app/          → Entry point, initialization
 ├── camera/       → CameraManager, FrameWorker, FPSMonitor, CameraState
-├── pose/         → PoseDetector (MediaPipe), PoseResult, Landmark
+├── pose/         → PoseDetector, MultiPoseDetector, SubjectTrack, PoseResult
 ├── motion/       → normalize_pose, angles, features, landmarks
 ├── video/        → ReferenceAnalyzer, ReferenceSequence, AnalysisCache
 ├── scoring/      → alignment, pose/angle/motion/timing compare, aggregation, rating, feedback, engine
@@ -78,6 +93,16 @@ src/opendance/
 ├── storage/      → (future)
 ├── ui/           → CameraWidget, StatusIndicator, SkeletonRenderer
 └── config/       → AppConfig, loader, defaults.toml
+
+scripts/
+├── camera_diagnostic.py          → Live webcam pose detection
+├── video_analysis_diagnostic.py  → Full video analysis pipeline
+├── landmark_replay.py            → Replay video with landmarks/angles/motion
+├── detection_analysis.py         → Detection-drop segment analysis
+├── multi_person_diagnostic.py    → Multi-person tracking diagnostic
+├── subject_tracking_replay.py    → Visual subject identity validation
+├── performance_diagnostic.py     → FPS benchmark tool
+└── download_models.py            → MediaPipe model downloader
 ```
 
 ## Important Architectural Decisions
@@ -91,70 +116,31 @@ src/opendance/
 7. **Configuration**: Frozen dataclasses, TOML defaults with merge/validation, opt-in features.
 8. **Privacy**: All processing local. No network. No frame logging.
 9. **Scoring weights**: pose=0.40, angle=0.25, motion=0.20, timing=0.15 (configurable).
+10. **Analysis FPS**: Default 15 FPS (0.93x real-time on CPU). Configurable 10/15/20/30.
+11. **Subject tracking**: Persistent identity lock. Composite matching (trajectory + geometry + area). Ambiguity → OCCLUDED, never silent switch.
+12. **Safety rule**: Identity correctness > detection continuity. Losing frames is preferable to scoring the wrong person.
 
 ## Quality Status
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 385 |
+| Total tests | 425 |
 | All passing | ✅ |
-| Coverage | ~92% |
 | ruff | Clean |
-| mypy | Clean (44 source files) |
+| mypy | Clean (45 source files) |
 | CI | GitHub Actions (Python 3.10/3.11, ubuntu-latest, libegl1+libgles2) |
 
-## Phase 3 — Scoring Pipeline (COMPLETE)
+## Known Limitations
 
-**Status: Implementation complete. All tests passing.**
-
-### Implemented Modules
-
-1. **Temporal alignment** — nearest-frame timestamp-ratio mapping (no DTW)
-2. **Pose comparison** — per-landmark 2D Euclidean distance → [0, 100] score
-3. **Angle comparison** — circular difference with wraparound → [0, 100]
-4. **Motion comparison** — speed + direction similarity → [0, 100]
-5. **Timing comparison** — phase-alignment (moving/still state match) → [0, 100]
-6. **Aggregation** — weighted combination using existing ScoringWeights, None renormalization
-7. **Event rating** — PERFECT/GREAT/OK/MEH/MISS from existing thresholds
-8. **Feedback** — structured FeedbackItems (body region, issue type, severity)
-9. **ScoringEngine** — orchestrator (score_frame, score_sequence)
-
-### Architectural Properties
-
-- All scoring modules are pure, stateless, deterministic functions
-- No DTW, no interpolation, no peak detection
-- Direction similarity clamped [0,1] (opposite = 0)
-- Timing is phase-alignment, not speed comparison
-- Acceleration excluded from motion scoring
-- Feedback: angle severity=error/90, pose severity=dist/0.5, capped [0,1]
-- LANDMARK_REGIONS maps all 33 indices to 6 body regions
-
-### Explicit Out of Scope (Phase 3)
-
-- Practice/Arcade mode UI
-- Combo tracking, final grading
-- DTW or advanced warping
-- ML-based scoring
-- Music/beat synchronization
-- Cloud/network/database
-- UI rendering of scores
-
-### Spec Location
-
-`.kiro/specs/scoring-pipeline/` (requirements.md, design.md, tasks.md)
-
-## Known Future Work
-
-- Phase 4: Practice/Arcade mode UI, combo, final grading
-- DTW temporal alignment (optional enhancement)
-- Beat detection / music sync
-- ML scoring models
-- Historical tracking
-- Mobile support
+- **Finger tracking**: 33-landmark Pose model does NOT track finger joints. Requires MediaPipe Hands (future).
+- **Animated characters**: MediaPipe detects fewer candidates on MMD/3D-rendered content vs. real humans.
+- **CPU inference**: ~60ms/frame. Default 15 FPS analysis keeps processing near real-time.
+- **Body rotation**: Detection degrades when person faces away from camera (handled as OCCLUDED/LOST).
+- **IMAGE_DIMENSIONS warning**: Known MediaPipe issue (#5639). Harmless — only affects Z-scale on non-square images, and scoring uses 2D (x,y) only.
 
 ## Next Step
 
-Implement Phase 4 (Practice/Arcade mode UI, combo tracking, final grading) or commit Phase 3 and tag.
+Phase 4: Practice/Arcade mode UI, combo tracking, final grading.
 
 ## How to Resume Development
 
@@ -162,4 +148,4 @@ Implement Phase 4 (Practice/Arcade mode UI, combo tracking, final grading) or co
 2. Download model: `python scripts/download_models.py`
 3. Run tests: `pytest tests/`
 4. Read active spec: `.kiro/specs/scoring-pipeline/`
-5. Follow the task dependency graph
+5. Run diagnostics: `python scripts/camera_diagnostic.py`
