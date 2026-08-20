@@ -1,4 +1,4 @@
-# 🕺 Project ModDance Hero
+#  Project ModDance Hero
 
 **Open-source dance analysis and rhythm-game scoring powered by real-time pose detection.**
 
