@@ -1,6 +1,7 @@
 """Silhouette renderer for Practice Mode."""
 
 from typing import Optional
+
 import cv2
 import numpy as np
 from PySide6.QtGui import QImage, QPixmap

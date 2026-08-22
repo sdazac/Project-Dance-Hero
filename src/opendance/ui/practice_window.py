@@ -4,19 +4,19 @@ import dataclasses
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QPixmap, QResizeEvent, QCloseEvent
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoSink, QVideoFrame
+from PySide6.QtGui import QCloseEvent, QPixmap, QResizeEvent
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from opendance.camera.manager import CameraManager
 from opendance.config.models import AppConfig
 from opendance.motion.normalizer import normalize_pose
+from opendance.pose.result import PoseResult
 from opendance.scoring.engine import ScoringEngine
 from opendance.scoring.session_tracker import SessionTracker
 from opendance.ui.scoreboard_widget import ScoreBoardWidget
 from opendance.ui.silhouette_renderer import get_transparent_silhouette
 from opendance.video.reference_analyzer import ReferenceAnalyzer
-from opendance.pose.result import PoseResult
 
 
 class AnalysisWorker(QThread):
