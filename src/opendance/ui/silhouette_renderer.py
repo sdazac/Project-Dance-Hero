@@ -1,5 +1,6 @@
 """Silhouette renderer for Practice Mode."""
 
+from typing import Optional
 import cv2
 import numpy as np
 from PySide6.QtGui import QImage, QPixmap
@@ -23,9 +24,10 @@ def get_transparent_silhouette(
         qimg = QImage(canvas.data, w, h, w * 4, QImage.Format.Format_RGBA8888)
         return QPixmap.fromImage(qimg)
 
-    lms = pose_result.poses[0]
+    # CORRECCIÓN DE MYPY: Se usa landmarks en lugar de poses[0]
+    lms = pose_result.landmarks
 
-    def get_pt(idx: int) -> tuple[int, int] | None:
+    def get_pt(idx: int) -> Optional[tuple[int, int]]:
         if idx >= len(lms):
             return None
         lm = lms[idx]
@@ -51,11 +53,13 @@ def get_transparent_silhouette(
         poly = np.array([pts['LS'], pts['RS'], pts['RH'], pts['LH']], np.int32)
         cv2.fillPoly(canvas, [poly], (200, 200, 200, 255))
 
-    def draw_limb(p1_key, p2_key, thickness):
-        if pts[p1_key] and pts[p2_key]:
-            cv2.line(canvas, pts[p1_key], pts[p2_key], (150, 150, 150, 255), thickness)
-            cv2.circle(canvas, pts[p1_key], thickness // 2, (150, 150, 150, 255), -1)
-            cv2.circle(canvas, pts[p2_key], thickness // 2, (150, 150, 150, 255), -1)
+    def draw_limb(p1_key: str, p2_key: str, thickness: int) -> None:
+        p1 = pts.get(p1_key)
+        p2 = pts.get(p2_key)
+        if p1 and p2:
+            cv2.line(canvas, p1, p2, (150, 150, 150, 255), thickness)
+            cv2.circle(canvas, p1, thickness // 2, (150, 150, 150, 255), -1)
+            cv2.circle(canvas, p2, thickness // 2, (150, 150, 150, 255), -1)
 
     draw_limb('LS', 'LE', 16)
     draw_limb('LE', 'LW', 12)
@@ -68,11 +72,14 @@ def get_transparent_silhouette(
     draw_limb('RK', 'RA', 16)
 
     # Cabeza
-    if pts['NO'] and pts['LS'] and pts['RS']:
-        neck_mid = ((pts['LS'][0] + pts['RS'][0]) // 2, (pts['LS'][1] + pts['RS'][1]) // 2)
-        head_radius = int(np.linalg.norm(np.array(pts['NO']) - np.array(neck_mid))) * 1
+    p_no = pts.get('NO')
+    p_ls = pts.get('LS')
+    p_rs = pts.get('RS')
+    if p_no and p_ls and p_rs:
+        neck_mid = ((p_ls[0] + p_rs[0]) // 2, (p_ls[1] + p_rs[1]) // 2)
+        head_radius = int(np.linalg.norm(np.array(p_no) - np.array(neck_mid))) * 1
         head_radius = max(20, min(50, head_radius))
-        cv2.circle(canvas, pts['NO'], head_radius, (220, 220, 220, 255), -1)
+        cv2.circle(canvas, p_no, head_radius, (220, 220, 220, 255), -1)
 
     canvas = np.ascontiguousarray(canvas)
     qimg = QImage(canvas.data, w, h, w * 4, QImage.Format.Format_RGBA8888)

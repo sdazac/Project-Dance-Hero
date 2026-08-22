@@ -1,10 +1,11 @@
 """Practice Mode Window (Full AV Playback, Async Loading & Real-time Scoring)."""
 
 import dataclasses
+from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QPixmap
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoSink
+from PySide6.QtGui import QPixmap, QResizeEvent, QCloseEvent
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoSink, QVideoFrame
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from opendance.camera.manager import CameraManager
@@ -15,18 +16,19 @@ from opendance.scoring.session_tracker import SessionTracker
 from opendance.ui.scoreboard_widget import ScoreBoardWidget
 from opendance.ui.silhouette_renderer import get_transparent_silhouette
 from opendance.video.reference_analyzer import ReferenceAnalyzer
+from opendance.pose.result import PoseResult
 
 
 class AnalysisWorker(QThread):
     """Ejecuta el análisis pesado en un hilo secundario para no congelar la UI."""
     finished = Signal(object)
 
-    def __init__(self, path: str, app_config: AppConfig):
+    def __init__(self, path: str, app_config: AppConfig) -> None:
         super().__init__()
         self.path = path
         self.app_config = app_config
 
-    def run(self):
+    def run(self) -> None:
         try:
             analyzer = ReferenceAnalyzer(
                 self.app_config.pose_config,
@@ -41,16 +43,17 @@ class AnalysisWorker(QThread):
 
 
 class PracticeWindow(QWidget):
-    def __init__(self, camera_manager: CameraManager, app_config: AppConfig):
+    def __init__(self, camera_manager: CameraManager, app_config: AppConfig) -> None:
         super().__init__()
         self._camera_manager = camera_manager
         self._app_config = app_config
         self._session = SessionTracker()
 
-        self._latest_pose = None
-        self._scoring_engine = None
+        self._latest_pose: Optional[PoseResult] = None
+        self._scoring_engine: Optional[ScoringEngine] = None
         self._is_playing = False
         self._video_path = ""
+        self._worker: Optional[AnalysisWorker] = None
 
         # --- Reproductor de Video (QVideoSink evita bugs de superposición en Windows) ---
         self._media_player = QMediaPlayer()
@@ -115,7 +118,7 @@ class PracticeWindow(QWidget):
         if self._camera_manager.frame_worker is not None:
             self._camera_manager.frame_worker.frame_ready.connect(self._on_camera_frame)
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         # Mantener los overlays ajustados al tamaño del reproductor de video
         vw_rect = self._video_display.rect()
@@ -132,11 +135,11 @@ class PracticeWindow(QWidget):
         self._loading_overlay.setGeometry(vw_rect)
 
     @Slot(object, object)
-    def _on_camera_frame(self, frame, pose_result):
+    def _on_camera_frame(self, frame: Any, pose_result: PoseResult) -> None:
         self._latest_pose = pose_result
 
     @Slot(object)
-    def _on_video_frame(self, frame):
+    def _on_video_frame(self, frame: QVideoFrame) -> None:
         if not frame.isValid():
             return
         image = frame.toImage()
@@ -151,7 +154,7 @@ class PracticeWindow(QWidget):
         )
         self._video_display.setPixmap(scaled)
 
-    def _load_video(self):
+    def _load_video(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "Select Dance Video", "", "Video Files (*.mp4 *.avi *.mkv)"
         )
@@ -176,7 +179,7 @@ class PracticeWindow(QWidget):
         self._worker.start()
 
     @Slot(object)
-    def _on_analysis_finished(self, result):
+    def _on_analysis_finished(self, result: Any) -> None:
         self._load_btn.setEnabled(True)
 
         if isinstance(result, Exception):
@@ -192,7 +195,7 @@ class PracticeWindow(QWidget):
 
         self._restart_video()
 
-    def _restart_video(self):
+    def _restart_video(self) -> None:
         self._session = SessionTracker()
         self._scoreboard.update_score("SS", 100.0, 0)
 
@@ -201,7 +204,7 @@ class PracticeWindow(QWidget):
         self._is_playing = True
         self._timer.start()
 
-    def _toggle_playback(self):
+    def _toggle_playback(self) -> None:
         if self._media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self._media_player.pause()
             self._timer.stop()
@@ -211,7 +214,7 @@ class PracticeWindow(QWidget):
             self._timer.start()
             self._is_playing = True
 
-    def _game_loop_tick(self):
+    def _game_loop_tick(self) -> None:
         if not self._latest_pose:
             return
 
@@ -245,10 +248,10 @@ class PracticeWindow(QWidget):
                     self._session.state.combo
                 )
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         self._camera_manager.stop()
         self._media_player.stop()
-        if hasattr(self, '_worker') and self._worker.isRunning():
+        if self._worker is not None and self._worker.isRunning():
             self._worker.terminate()
             self._worker.wait()
         super().closeEvent(event)

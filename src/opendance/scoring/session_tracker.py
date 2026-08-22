@@ -25,7 +25,7 @@ class SessionTracker:
         EventRating.MISS: 0.0
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.state = SessionState()
 
     def update_with_rating(self, rating: EventRating) -> SessionState:
