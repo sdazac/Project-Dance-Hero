@@ -1,0 +1,46 @@
+[scoring.thresholds]
+perfect_min = 90.0
+great_min = 75.0
+ok_min = 50.0
+meh_min = 30.0
+
+[scoring.weights]
+pose_similarity = 0.40
+angle_similarity = 0.25
+motion_similarity = 0.20
+timing_similarity = 0.15
+
+[camera]
+device_index = 0
+resolution_width = 640
+resolution_height = 480
+consecutive_failure_threshold = 10
+
+[pose]
+model_path = "assets/models/pose_landmarker.task"
+skeleton_visibility_threshold = 0.5
+max_poses = 1
+
+[normalization]
+enabled = false
+visibility_threshold = 0.5
+min_body_scale = 0.001
+missing_data_strategy = "leave_none"
+
+[motion]
+min_velocity_threshold = 0.01
+
+[reference]
+cache_directory = ""
+auto_cache = false
+sample_fps = 15.0
+
+[scoring.comparison]
+pose_scale_factor = 200.0
+angle_scale = 1.0
+timing_scale = 0.5
+min_valid_landmarks = 8
+feedback_significance_threshold = 0.1
+motion_speed_weight = 0.5
+motion_direction_weight = 0.5
+epsilon = 0.001
