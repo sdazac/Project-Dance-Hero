@@ -82,6 +82,6 @@ def get_transparent_silhouette(
         head_radius = max(20, min(50, head_radius))
         cv2.circle(canvas, p_no, head_radius, (220, 220, 220, 255), -1)
 
-    canvas = np.ascontiguousarray(canvas)
+    canvas = np.ascontiguousarray(canvas)  # type: ignore
     qimg = QImage(canvas.data, w, h, w * 4, QImage.Format.Format_RGBA8888)
     return QPixmap.fromImage(qimg)
