@@ -19,7 +19,9 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libgles2
+          # libegl1/libgles2: Qt GUI (offscreen). libpulse0 + mainloop-glib:
+          # required by PySide6.QtMultimedia (QMediaPlayer) at import time on Linux.
+          sudo apt-get install -y libegl1 libgles2 libpulse0 libpulse-mainloop-glib0
 
       - uses: actions/setup-python@v5
         with:
