@@ -91,11 +91,27 @@ class ComparisonConfig:
 
 
 @dataclass(frozen=True)
+class PracticeConfig:
+    """Practice loop performance configuration (Phase 4).
+
+    Controls the decoupled render/scoring rates and silhouette rendering size
+    so smoothness and scoring load can be tuned independently per hardware.
+    """
+
+    render_fps: float = 30.0
+    scoring_fps: float = 12.0
+    silhouette_size: int = 250
+    # Selectable playback speed multipliers and the initial default speed.
+    playback_speeds: tuple[float, ...] = (0.5, 0.75, 1.0, 1.25, 1.5)
+    default_playback_speed: float = 1.0
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level application configuration.
 
     Composed of scoring, camera, pose, normalization, motion, reference,
-    and comparison sections.
+    comparison, and practice sections.
     Immutable after construction — create a new instance for changes.
     """
 
@@ -109,3 +125,4 @@ class AppConfig:
     motion_config: MotionConfig = field(default_factory=MotionConfig)
     reference_config: ReferenceConfig = field(default_factory=ReferenceConfig)
     comparison_config: ComparisonConfig = field(default_factory=ComparisonConfig)
+    practice_config: PracticeConfig = field(default_factory=PracticeConfig)

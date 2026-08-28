@@ -33,6 +33,8 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
+.hypothesis/
 
 # Log files
 *.log

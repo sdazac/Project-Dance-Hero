@@ -36,6 +36,7 @@ class CameraManager(QObject):
         super().__init__(parent)
         self._camera_config = camera_config
         self._pose_config = pose_config
+        self._active_device_index: int = camera_config.device_index
         self._state = CameraState.INACTIVE
         self._error_message = ""
         self._capture: cv2.VideoCapture | None = None
@@ -63,6 +64,11 @@ class CameraManager(QObject):
         """Active FrameWorker instance, or None if not running."""
         return self._frame_worker
 
+    @property
+    def device_index(self) -> int:
+        """The camera device index currently in use."""
+        return self._active_device_index
+
     def _set_state(self, new_state: CameraState, error_msg: str = "") -> None:
         """Transition to a new state and emit notification."""
         self._state = new_state
@@ -89,7 +95,7 @@ class CameraManager(QObject):
             return
 
         # Open camera
-        device_index = self._camera_config.device_index
+        device_index = self._active_device_index
         capture = cv2.VideoCapture(device_index)
 
         if not capture.isOpened():
@@ -160,6 +166,19 @@ class CameraManager(QObject):
         """Stop camera and release resources. Any state → INACTIVE."""
         self._release_resources()
         self._set_state(CameraState.INACTIVE)
+
+    def restart(self, device_index: int | None = None) -> None:
+        """Release the camera and re-open it, optionally on a new device index.
+
+        Safe to call from the UI. Emits state_changed like start(). If
+        device_index is provided it becomes the active index for this and
+        future starts.
+        """
+        if device_index is not None:
+            self._active_device_index = device_index
+        self._release_resources()
+        self._state = CameraState.INACTIVE
+        self.start()
 
     def cleanup(self) -> None:
         """Release all resources. Called on application shutdown."""

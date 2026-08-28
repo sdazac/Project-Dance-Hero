@@ -333,3 +333,168 @@ class TestCameraManagerPauseResume:
             manager.resume()
             assert manager.state == CameraState.ACTIVE
             manager.stop()
+
+
+class TestCameraManagerRestart:
+    """Restart / device-change behavior (practice-io-controls task 3.2).
+
+    Requirements 1.1, 1.3, 2.1, 2.3.
+    """
+
+    def test_restart_with_new_index_releases_and_reopens(
+        self, qapp: QApplication, camera_config: CameraConfig, pose_config: PoseConfig
+    ) -> None:
+        """restart(new_index) releases the current resources and re-opens on the
+        new index: device_index reflects it, state is ACTIVE, and a new capture
+        and frame worker were created (Requirements 1.1, 2.1)."""
+        mock_captures: list[MagicMock] = []
+
+        def make_capture(device_index: int) -> MagicMock:
+            mc = MagicMock()
+            mc.isOpened.return_value = True
+            mc.get.return_value = 640
+            mc.read.return_value = (False, None)
+            mock_captures.append(mc)
+            return mc
+
+        with patch(
+            "opendance.camera.manager.cv2.VideoCapture", side_effect=make_capture
+        ) as vc, patch("opendance.camera.manager.PoseDetector") as mock_pd_class:
+            mock_pd_class.return_value = MagicMock()
+            manager = CameraManager(camera_config, pose_config)
+            manager.start()
+            assert manager.state == CameraState.ACTIVE
+            first_worker = manager.frame_worker
+
+            manager.restart(3)
+
+            assert manager.device_index == 3
+            assert manager.state == CameraState.ACTIVE
+            # A new capture was opened on the new index.
+            assert vc.call_args_list[-1].args == (3,)
+            assert len(mock_captures) == 2
+            # The original capture was released during restart.
+            mock_captures[0].release.assert_called_once()
+            # A fresh frame worker was created.
+            assert manager.frame_worker is not None
+            assert manager.frame_worker is not first_worker
+
+            manager.stop()
+
+    def test_restart_without_arg_reuses_current_index(
+        self, qapp: QApplication, camera_config: CameraConfig, pose_config: PoseConfig
+    ) -> None:
+        """restart() with no argument keeps the current device index
+        (Requirement 1.1)."""
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.get.return_value = 640
+        mock_capture.read.return_value = (False, None)
+
+        with patch(
+            "opendance.camera.manager.cv2.VideoCapture", return_value=mock_capture
+        ) as vc, patch("opendance.camera.manager.PoseDetector") as mock_pd_class:
+            mock_pd_class.return_value = MagicMock()
+            manager = CameraManager(camera_config, pose_config)
+            manager.start()
+            assert manager.device_index == 2
+
+            manager.restart()
+
+            assert manager.device_index == 2
+            assert manager.state == CameraState.ACTIVE
+            # Every open used the configured index (2).
+            for call in vc.call_args_list:
+                assert call.args == (2,)
+
+            manager.stop()
+
+    def test_device_index_reflects_configured_then_new_index(
+        self, qapp: QApplication, camera_config: CameraConfig, pose_config: PoseConfig
+    ) -> None:
+        """device_index reports the configured index initially and the new index
+        after a device change (Requirement 2.1)."""
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.get.return_value = 640
+        mock_capture.read.return_value = (False, None)
+
+        with patch(
+            "opendance.camera.manager.cv2.VideoCapture", return_value=mock_capture
+        ), patch("opendance.camera.manager.PoseDetector") as mock_pd_class:
+            mock_pd_class.return_value = MagicMock()
+            manager = CameraManager(camera_config, pose_config)
+            # Reflects configured index before any start.
+            assert manager.device_index == 2
+
+            manager.start()
+            assert manager.device_index == 2
+
+            manager.restart(5)
+            assert manager.device_index == 5
+
+            manager.stop()
+
+    def test_failed_open_on_restart_transitions_to_error(
+        self, qapp: QApplication, camera_config: CameraConfig, pose_config: PoseConfig
+    ) -> None:
+        """A failed open during restart → ERROR via state_changed, and the
+        manager remains usable (no exception) (Requirements 1.3, 2.3)."""
+        open_flags = iter([True, False])  # first start ok, restart fails
+
+        def make_capture(device_index: int) -> MagicMock:
+            mc = MagicMock()
+            mc.isOpened.return_value = next(open_flags)
+            mc.get.return_value = 640
+            mc.read.return_value = (False, None)
+            return mc
+
+        state_changes: list[tuple[CameraState, str]] = []
+
+        with patch(
+            "opendance.camera.manager.cv2.VideoCapture", side_effect=make_capture
+        ), patch("opendance.camera.manager.PoseDetector") as mock_pd_class:
+            mock_pd_class.return_value = MagicMock()
+            manager = CameraManager(camera_config, pose_config)
+            manager.start()
+            assert manager.state == CameraState.ACTIVE
+
+            manager.state_changed.connect(
+                lambda s, m: state_changes.append((s, m))
+            )
+            manager.restart(4)
+
+            assert manager.device_index == 4
+            assert manager.state == CameraState.ERROR
+            assert "Could not open camera" in manager.error_message
+            assert any(s == CameraState.ERROR for s, _ in state_changes)
+
+            # Manager remains usable: a subsequent stop is safe.
+            manager.stop()
+            assert manager.state == CameraState.INACTIVE
+
+    def test_restart_emits_active_state_changed(
+        self, qapp: QApplication, camera_config: CameraConfig, pose_config: PoseConfig
+    ) -> None:
+        """A successful restart emits state_changed(ACTIVE) (Requirement 1.1)."""
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.get.return_value = 640
+        mock_capture.read.return_value = (False, None)
+
+        with patch(
+            "opendance.camera.manager.cv2.VideoCapture", return_value=mock_capture
+        ), patch("opendance.camera.manager.PoseDetector") as mock_pd_class:
+            mock_pd_class.return_value = MagicMock()
+            manager = CameraManager(camera_config, pose_config)
+            manager.start()
+
+            state_changes: list[tuple[CameraState, str]] = []
+            manager.state_changed.connect(
+                lambda s, m: state_changes.append((s, m))
+            )
+            manager.restart(1)
+
+            assert (CameraState.ACTIVE, "") in state_changes
+
+            manager.stop()

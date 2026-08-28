@@ -15,8 +15,8 @@ ModDance Hero (formerly OpenDance AI) is an open-source desktop application for 
 | Phase 2 — Pose Normalization & Motion | ✅ Complete | `v0.2.0` | +81 |
 | Phase 3 — Scoring Pipeline | ✅ Complete | `v0.3.0` | +193 |
 | Phase 3.5 — Subject Tracking & Diagnostics | ✅ Complete | `15b0fd5` | +40 |
-| **Phase 4 — Practice Mode UI & Arcade Scoring** | 🟡 **In Progress**| `local` | TBD |
-| **Total** | | `15b0fd5` | **425** |
+| **Phase 4 — Practice Mode UI & Arcade Scoring** | 🟡 **In Progress**| `local` | (see total) |
+| **Total** | | `local` | **625** |
 
 ## Completed Phases
 
@@ -85,7 +85,44 @@ ModDance Hero (formerly OpenDance AI) is an open-source desktop application for 
 - **SilhouetteRenderer**: Replaced wireframe with a transparent, organic humanoid avatar (RGBA canvas, rounded joints, mirror mode).
 - **AV Playback Integration**: Replaced OpenCV playback with `QMediaPlayer` and `QVideoSink` for fluid, hardware-accelerated video/audio with no UI blocking.
 - **Asynchronous Processing**: `ReferenceAnalyzer` offloaded to a background `QThread` (AnalysisWorker) with a loading overlay to prevent UI freezes.
-- **PracticeWindow**: Master window orchestrating video playback, camera background processing, floating UI overlays (HUD & Silhouette), and the gameplay loop via `QTimer`.
+- **PracticeWindow**: Master window orchestrating video playback, camera background processing, floating UI overlays (HUD & Silhouette), and the gameplay loop.
+
+#### Phase 4 sub-specs (this iteration)
+
+Practice Mode was hardened through a series of focused, spec-driven iterations
+(each with requirements → design → tasks and unit/property/integration tests):
+
+- **`practice-mode-mvp`** ✅ — Decoupled the single 33 ms game loop into
+  independent render and scoring timers (`PracticeConfig` render/scoring FPS),
+  real monotonic timestamps in `FrameWorker`, restored combo/grade semantics,
+  latest-wins pose handling, effective-FPS diagnostics, and timer/resource
+  cleanup on pause/finish/error/close.
+- **`scoring-accuracy-fix`** ✅ — Fixed a correctness bug where
+  `accuracy_percentage` could exceed 100% during combo streaks (the arcade
+  multiplier leaked into the accuracy ratio). Accuracy is now the
+  multiplier-independent mean of per-rating quality weights
+  (`RATING_QUALITY`: PERFECT 1.0 / GREAT 0.75 / OK 0.50 / MEH 0.30 / MISS 0.0),
+  bounded to [0, 100] and order-independent. Covered by Hypothesis property
+  tests (bounded, order-independent, endpoints, mean).
+- **`live-full-scoring`** ✅ — The live scoring path now feeds real player joint
+  angles (`compute_joint_angles`) and motion features (`motion_for_latest` over a
+  bounded rolling pose buffer) into `score_frame`, so all four similarity metrics
+  (pose/angle/motion/timing) contribute during practice.
+- **`practice-playback-controls`** ✅ — Seek slider + configurable playback-speed
+  control wired to `QMediaPlayer`, preserving position-based scoring alignment.
+  A seek clears the live pose buffer (temporal discontinuity); the selected speed
+  is preserved across restart. Config (`PracticeConfig.playback_speeds` /
+  `default_playback_speed`) with loader validation, plus pure slider↔ms helpers,
+  all unit-tested (offscreen widget tests included).
+- **`practice-io-controls`** 🟡 In progress — Camera management (restart + input
+  device/port change via `CameraManager.restart` / `device_index`) and a
+  reference-video analysis progress bar. The analyzer now accepts an additive
+  `progress_callback`; `AnalysisWorker` exposes a `progress(int)` signal; a pure
+  `progress_percent(done, total)` helper maps sample counts to a bounded percent.
+  Backend + helpers + tests are done (analyzer progress, camera restart,
+  percent helper). Remaining: the `PracticeWindow` UI wiring — QProgressBar,
+  device selector (QSpinBox), "Restart Camera" button, and camera status label
+  (spec tasks 5–6).
 
 ## Current Architecture
 
@@ -179,10 +216,10 @@ scripts/
 
 | **Metric**  | **Value**                                                          |
 | ----------- | ------------------------------------------------------------------ |
-| Total tests | 425                                                                |
+| Total tests | 625                                                                |
 | All passing | ✅                                                                  |
 | ruff        | Clean                                                              |
-| mypy        | Clean (45 source files)                                            |
+| mypy        | Clean (51 source files)                                            |
 | CI          | GitHub Actions (Python 3.10/3.11, ubuntu-latest, libegl1+libgles2) |
 
 ## Known Limitations
@@ -211,14 +248,29 @@ scripts/
 
 
 
-- **Phase 4 Scoring Inputs**: The real-time `_game_loop_tick` currently passes empty dictionaries `({}, None)` to the `score_frame` method for joint angles and motion.
+- **Phase 4 Scoring Inputs**: ✅ Resolved. The live scoring path (`_scoring_tick`, formerly `_game_loop_tick`) now feeds real player joint angles (`compute_joint_angles`) and motion features (`motion_for_latest` over a bounded rolling pose buffer) into `score_frame`, so all four similarity metrics (pose/angle/motion/timing) contribute during practice.
 
 
 
 
 ## Next Step
 
-Phase 4: Practice/Arcade mode UI, combo tracking, final grading. (Currently extracting real-time player joint angles and motion features inside `practice_window.py` to fully feed the `ScoringEngine`).
+Phase 4 MVP hardening is underway via focused sub-specs. Completed this iteration:
+`practice-mode-mvp`, `scoring-accuracy-fix`, and `live-full-scoring` (all live
+scoring metrics now contribute; accuracy is correct and bounded).
+
+Immediate next step: finish **`practice-io-controls`** — wire the analysis
+progress bar (QProgressBar), the camera device selector (QSpinBox), the "Restart
+Camera" button, and the camera status label into `PracticeWindow` (spec tasks
+5–6), then run the checkpoint. The camera/analyzer backend, the `progress_percent`
+helper, and their tests are already done.
+
+Remaining toward a full MVP (planned order):
+1. Finish I/O controls UI (camera restart/device + analysis progress bar) —
+   in progress.
+2. Session analytics: accuracy-over-time and weak-section detection
+   (`analytics/` layer is currently empty).
+3. Arcade Mode: full-song play-through, combo/score, final grade.
 
 ## How to Resume Development
 

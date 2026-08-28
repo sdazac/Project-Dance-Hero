@@ -253,3 +253,136 @@ class TestReferenceAnalyzerCleanup:
         analyzer.close()
         mock_detector.close.assert_called_once()
         assert analyzer._pose_detector is None
+
+
+class TestAnalyzerProgress:
+    """Test the additive progress_callback in ReferenceAnalyzer.analyze.
+
+    Validates: Requirements 5.1, 5.2
+    """
+
+    def _setup_mock_capture(self, num_frames: int, fps: float = 30.0) -> MagicMock:
+        """Create a mock VideoCapture that returns synthetic frames.
+
+        Mirrors TestReferenceAnalyzerProcessing._setup_mock_capture so progress
+        tests use the same capture-mocking conventions.
+        """
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        # cv2 constants: FRAME_COUNT=7, FPS=5, WIDTH=3, HEIGHT=4
+        mock_capture.get.side_effect = lambda prop: {
+            7: float(num_frames),   # CAP_PROP_FRAME_COUNT
+            5: fps,                  # CAP_PROP_FPS
+            3: 640.0,               # CAP_PROP_FRAME_WIDTH
+            4: 480.0,               # CAP_PROP_FRAME_HEIGHT
+        }.get(prop, 0.0)
+
+        fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        mock_capture.read.return_value = (True, fake_frame)
+        mock_capture.set.return_value = True
+        return mock_capture
+
+    def test_callback_invoked_once_per_sample(
+        self,
+        tmp_path: Path,
+        pose_config: PoseConfig,
+        norm_config: NormalizationConfig,
+    ) -> None:
+        """Callback fires once per sample, non-decreasing, ending at (N, N)."""
+        # sample_fps=10, 30 frames @ 30 fps → duration 1.0s → N = 1000ms / 100ms = 10.
+        ref_config = ReferenceConfig(sample_fps=10.0)
+        expected_n = 10
+
+        video_file = tmp_path / "test.mp4"
+        video_file.write_bytes(b"fake")
+
+        mock_capture = self._setup_mock_capture(num_frames=30, fps=30.0)
+        valid_pose = _make_valid_pose_result()
+
+        calls: list[tuple[int, int]] = []
+
+        with patch("cv2.VideoCapture", return_value=mock_capture), \
+             patch(
+                 "opendance.video.reference_analyzer.PoseDetector"
+             ) as mock_pd_class:
+            mock_detector = MagicMock()
+            mock_detector.detect.return_value = valid_pose
+            mock_pd_class.return_value = mock_detector
+
+            analyzer = ReferenceAnalyzer(pose_config, norm_config, ref_config)
+            analyzer.analyze(str(video_file), progress_callback=lambda d, t: calls.append((d, t)))
+
+        # One call per sample.
+        assert len(calls) == expected_n
+        # done values are non-decreasing and end at N.
+        done_values = [d for d, _ in calls]
+        assert done_values == sorted(done_values)
+        assert done_values[-1] == expected_n
+        # Final call is (N, N).
+        assert calls[-1] == (expected_n, expected_n)
+        # Every call reports total == N.
+        assert all(t == expected_n for _, t in calls)
+
+    def test_no_callback_is_backward_compatible(
+        self,
+        tmp_path: Path,
+        pose_config: PoseConfig,
+        norm_config: NormalizationConfig,
+    ) -> None:
+        """analyze(path) without a callback returns the same sequence as before.
+
+        Mirrors TestReferenceAnalyzerProcessing.test_five_frame_video_produces_sequence
+        setup and asserts the no-callback path still works unchanged.
+        """
+        ref_config = ReferenceConfig(sample_fps=10.0)
+        video_file = tmp_path / "test.mp4"
+        video_file.write_bytes(b"fake video data")
+
+        mock_capture = self._setup_mock_capture(num_frames=30, fps=30.0)
+        valid_pose = _make_valid_pose_result()
+
+        with patch("cv2.VideoCapture", return_value=mock_capture), \
+             patch(
+                 "opendance.video.reference_analyzer.PoseDetector"
+             ) as mock_pd_class:
+            mock_detector = MagicMock()
+            mock_detector.detect.return_value = valid_pose
+            mock_pd_class.return_value = mock_detector
+
+            analyzer = ReferenceAnalyzer(pose_config, norm_config, ref_config)
+            seq = analyzer.analyze(str(video_file))
+
+        # 10 samples, all valid; behavior unchanged (no exception, expected length).
+        assert len(seq.poses) == 10
+        assert len(seq.motion_features) == len(seq.poses)
+        assert len(seq.joint_angles) == len(seq.poses)
+        assert all(p is not None for p in seq.poses)
+
+    def test_empty_video_calls_callback_once_with_zero(
+        self,
+        tmp_path: Path,
+        pose_config: PoseConfig,
+        norm_config: NormalizationConfig,
+        ref_config: ReferenceConfig,
+    ) -> None:
+        """num_samples == 0 → callback called exactly once with (0, 0)."""
+        video_file = tmp_path / "empty.mp4"
+        video_file.write_bytes(b"fake")
+
+        # 0 frames → duration 0 → num_samples == 0.
+        mock_capture = self._setup_mock_capture(num_frames=0, fps=30.0)
+
+        calls: list[tuple[int, int]] = []
+
+        with patch("cv2.VideoCapture", return_value=mock_capture), \
+             patch(
+                 "opendance.video.reference_analyzer.PoseDetector"
+             ) as mock_pd_class:
+            mock_detector = MagicMock()
+            mock_detector.detect.return_value = PoseResult.empty()
+            mock_pd_class.return_value = mock_detector
+
+            analyzer = ReferenceAnalyzer(pose_config, norm_config, ref_config)
+            analyzer.analyze(str(video_file), progress_callback=lambda d, t: calls.append((d, t)))
+
+        assert calls == [(0, 0)]

@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from typing import Any
 
 from PySide6.QtCore import QThread, Signal
@@ -44,6 +45,9 @@ class FrameWorker(QThread):
         """Main acquisition loop. Runs until request_stop() is called."""
         self._running = True
         consecutive_failures = 0
+        # Anchor timestamps to real elapsed time so alignment reflects actual
+        # playback, not a fixed per-frame step (Requirement 3.2).
+        start = time.perf_counter()
         logger.info("FrameWorker started.")
 
         while self._running:
@@ -79,7 +83,14 @@ class FrameWorker(QThread):
             # Successful read — reset failure counter
             consecutive_failures = 0
             self._fps_monitor.tick()
-            self._timestamp_ms += 33  # Approximate ~30fps timestamp increment
+
+            # Derive the timestamp from real elapsed time.
+            timestamp_ms = int((time.perf_counter() - start) * 1000)
+            # MediaPipe VIDEO mode requires strictly increasing timestamps; if a
+            # fast loop produces a duplicate/earlier value, bump by +1 ms.
+            if timestamp_ms <= self._timestamp_ms:
+                timestamp_ms = self._timestamp_ms + 1
+            self._timestamp_ms = timestamp_ms
 
             # Run pose detection on worker thread (non-blocking for UI)
             pose_result = self._pose_detector.detect(frame, self._timestamp_ms)

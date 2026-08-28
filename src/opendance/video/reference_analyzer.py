@@ -5,6 +5,7 @@ Uses PoseDetector (Phase 1, unchanged) for per-frame detection.
 """
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,11 @@ class ReferenceAnalyzer:
         self._reference_config = reference_config
         self._pose_detector: PoseDetector | None = None
 
-    def analyze(self, video_path: str) -> ReferenceSequence:
+    def analyze(
+        self,
+        video_path: str,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> ReferenceSequence:
         """Analyze video. Accepts local filesystem path only.
 
         Steps:
@@ -68,12 +73,15 @@ class ReferenceAnalyzer:
             raise ValueError(f"Cannot open video file: {video_path}")
 
         try:
-            return self._process_video(capture, video_path)
+            return self._process_video(capture, video_path, progress_callback)
         finally:
             capture.release()
 
     def _process_video(
-        self, capture: Any, video_path: str
+        self,
+        capture: Any,
+        video_path: str,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> ReferenceSequence:
         """Internal: process opened VideoCapture."""
         import cv2
@@ -114,41 +122,24 @@ class ReferenceAnalyzer:
             sample_fps,
         )
 
+        # Initialize the progress bar even when there is nothing to process,
+        # so the UI can render a bar for empty/undecodable videos.
+        if num_samples == 0 and progress_callback is not None:
+            progress_callback(0, 0)
+
         # Process each sample
         poses: list[NormalizedPose | None] = []
         angles_list: list[dict[str, float | None] | None] = []
 
         for sample_idx in range(num_samples):
-            timestamp_ms = int(sample_idx * sample_interval_ms)
-
-            # Seek to the corresponding video frame
-            frame_number = int((timestamp_ms / 1000.0) * video_fps)
-            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-
-            ok, frame = capture.read()
-            if not ok or frame is None:
-                poses.append(None)
-                angles_list.append(None)
-                continue
-
-            # Detect pose
-            pose_result: PoseResult = self._pose_detector.detect(frame, timestamp_ms)
-
-            if pose_result.is_empty:
-                poses.append(None)
-                angles_list.append(None)
-                continue
-
-            # Normalize
-            normalized = normalize_pose(pose_result, self._normalization_config)
-            poses.append(normalized if normalized.valid else None)
-
-            # Joint angles
-            if normalized.valid:
-                angles = compute_joint_angles(normalized)
-                angles_list.append(angles)
-            else:
-                angles_list.append(None)
+            # The per-sample work is delegated so this loop body has no early
+            # exits; progress is therefore reported exactly once per iteration,
+            # including samples whose frame/pose is skipped.
+            self._process_sample(
+                capture, sample_idx, sample_interval_ms, video_fps, poses, angles_list
+            )
+            if progress_callback is not None:
+                progress_callback(sample_idx + 1, num_samples)
 
         # Compute motion features from the full sequence
         from opendance.config.models import MotionConfig
@@ -161,6 +152,56 @@ class ReferenceAnalyzer:
             motion_features=tuple(motion_results),
             joint_angles=tuple(angles_list),
         )
+
+    def _process_sample(
+        self,
+        capture: Any,
+        sample_idx: int,
+        sample_interval_ms: float,
+        video_fps: float,
+        poses: list[NormalizedPose | None],
+        angles_list: list[dict[str, float | None] | None],
+    ) -> None:
+        """Process a single sample, appending its pose/angles to the sequences.
+
+        Always appends exactly one entry to each of ``poses`` and
+        ``angles_list`` (``None`` when the frame or pose is unusable), so the
+        caller can report progress once per sample regardless of the outcome.
+        """
+        import cv2
+
+        assert self._pose_detector is not None
+
+        timestamp_ms = int(sample_idx * sample_interval_ms)
+
+        # Seek to the corresponding video frame
+        frame_number = int((timestamp_ms / 1000.0) * video_fps)
+        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            poses.append(None)
+            angles_list.append(None)
+            return
+
+        # Detect pose
+        pose_result: PoseResult = self._pose_detector.detect(frame, timestamp_ms)
+
+        if pose_result.is_empty:
+            poses.append(None)
+            angles_list.append(None)
+            return
+
+        # Normalize
+        normalized = normalize_pose(pose_result, self._normalization_config)
+        poses.append(normalized if normalized.valid else None)
+
+        # Joint angles
+        if normalized.valid:
+            angles = compute_joint_angles(normalized)
+            angles_list.append(angles)
+        else:
+            angles_list.append(None)
 
     def close(self) -> None:
         """Release PoseDetector resources."""

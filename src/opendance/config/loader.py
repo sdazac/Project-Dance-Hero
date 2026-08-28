@@ -20,6 +20,7 @@ from opendance.config.models import (
     MotionConfig,
     NormalizationConfig,
     PoseConfig,
+    PracticeConfig,
     ReferenceConfig,
     ScoringThresholds,
     ScoringWeights,
@@ -406,6 +407,92 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
         )
         comp_epsilon = defaults_comp.epsilon
 
+    # Validate and build PracticeConfig (Phase 4)
+    practice_raw = merged.get("practice", {})
+    defaults_practice = PracticeConfig()
+
+    practice_render_fps = validate_value(
+        "practice.render_fps",
+        practice_raw.get("render_fps", defaults_practice.render_fps),
+        float,
+        (1.0, 120.0),
+        defaults_practice.render_fps,
+    )
+    if practice_render_fps <= 1.0:
+        logger.warning(
+            "Configuration key 'practice.render_fps': must be > 1. Using default."
+        )
+        practice_render_fps = defaults_practice.render_fps
+
+    practice_scoring_fps = validate_value(
+        "practice.scoring_fps",
+        practice_raw.get("scoring_fps", defaults_practice.scoring_fps),
+        float,
+        (1.0, 60.0),
+        defaults_practice.scoring_fps,
+    )
+    if practice_scoring_fps <= 1.0:
+        logger.warning(
+            "Configuration key 'practice.scoring_fps': must be > 1. Using default."
+        )
+        practice_scoring_fps = defaults_practice.scoring_fps
+
+    practice_silhouette_size = validate_value(
+        "practice.silhouette_size",
+        practice_raw.get("silhouette_size", defaults_practice.silhouette_size),
+        int,
+        (50, 1000),
+        defaults_practice.silhouette_size,
+    )
+
+    # playback_speeds: filter to numeric values within [0.25, 4.0]; empty -> defaults
+    raw_speeds = practice_raw.get("playback_speeds", None)
+    if isinstance(raw_speeds, (list, tuple)):
+        filtered_speeds = [
+            float(v)
+            for v in raw_speeds
+            if isinstance(v, (int, float))
+            and not isinstance(v, bool)
+            and 0.25 <= v <= 4.0
+        ]
+        if filtered_speeds:
+            practice_playback_speeds = tuple(filtered_speeds)
+        else:
+            logger.warning(
+                "Configuration key 'practice.playback_speeds': no valid speeds. "
+                "Using defaults."
+            )
+            practice_playback_speeds = tuple(defaults_practice.playback_speeds)
+    else:
+        if raw_speeds is not None:
+            logger.warning(
+                "Configuration key 'practice.playback_speeds': expected a list. "
+                "Using defaults."
+            )
+        practice_playback_speeds = tuple(defaults_practice.playback_speeds)
+
+    # default_playback_speed: validate type/range, then ensure it is a selectable speed
+    practice_default_speed = validate_value(
+        "practice.default_playback_speed",
+        practice_raw.get(
+            "default_playback_speed", defaults_practice.default_playback_speed
+        ),
+        float,
+        (0.25, 4.0),
+        defaults_practice.default_playback_speed,
+    )
+    if practice_default_speed not in practice_playback_speeds:
+        substitute = (
+            1.0 if 1.0 in practice_playback_speeds else practice_playback_speeds[0]
+        )
+        logger.warning(
+            "Configuration key 'practice.default_playback_speed': value %s is not "
+            "in the available speeds. Using %s.",
+            practice_default_speed,
+            substitute,
+        )
+        practice_default_speed = substitute
+
     return AppConfig(
         scoring_thresholds=ScoringThresholds(**threshold_kwargs),
         scoring_weights=ScoringWeights(**weight_kwargs),
@@ -434,6 +521,13 @@ def _build_config(merged: dict[str, Any]) -> AppConfig:
             motion_speed_weight=comp_speed_weight,
             motion_direction_weight=comp_dir_weight,
             epsilon=comp_epsilon,
+        ),
+        practice_config=PracticeConfig(
+            render_fps=practice_render_fps,
+            scoring_fps=practice_scoring_fps,
+            silhouette_size=practice_silhouette_size,
+            playback_speeds=practice_playback_speeds,
+            default_playback_speed=practice_default_speed,
         ),
     )
 
